@@ -3,6 +3,8 @@ SCREEN_HEIGHT = 270
 UI_HEIGHT = 48
 GRID_SIZE = 16
 STARTING_SEEDS = 10
+PLAYING_FIELD_LEFT = 137
+PLAYING_FIELD_RIGHT = 343
 
 Game = {
    Player = {
@@ -47,11 +49,8 @@ Game = {
 }
 
 Game.controls = {
-   move_up = Game.buttons.up,
-   move_down = Game.buttons.down,
-   move_left = Game.buttons.left,
-   move_right = Game.buttons.right,
-   spawn_tree = Game.buttons.o,
+   turn_clockwise = Game.buttons.x,
+   turn_counterclockwise = Game.buttons.o,
 }
 
 Keys = {
