@@ -5,17 +5,9 @@ GRID_SIZE = 16
 STARTING_SEEDS = 10
 PLAYING_FIELD_LEFT = 137
 PLAYING_FIELD_RIGHT = 343
-
+BOTTOM_HEIGHT = 8
 Game = {
-   Player = {
-      invulnerable_time = 120, -- frames
-      max_health = 4,
-      move_speed = vec(1, 1),
-      sprite_index_offset = 8,
-      width = 24,
-      height = 32,
-   },
-   title = "Necrotron",
+   title = "OBP",
    score = {
    },
    debug = {
@@ -46,11 +38,6 @@ Game = {
       sl2 = 14,
       sr2 = 15,
    }
-}
-
-Game.controls = {
-   turn_clockwise = Game.buttons.x,
-   turn_counterclockwise = Game.buttons.o,
 }
 
 Keys = {
