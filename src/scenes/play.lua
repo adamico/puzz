@@ -134,10 +134,7 @@ local function handle_button_holding()
       stop_moving_timer = STOP_MOVING_FRAMES
       current_piece.speed_x = PIECE_SPEED_X
       vertical_move_timer_multiplier = 1
-      return
-   end
-
-   if stop_moving_timer > 0 then
+   elseif stop_moving_timer > 0 then
       stop_moving_timer -= 1
       if stop_moving_timer == 0 then
          current_piece.speed_x = 0
