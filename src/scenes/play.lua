@@ -44,16 +44,42 @@ local function set_piece(px, py)
 
    for x = 0, 2 do
       for y = 0, 2 do
-         play_map:set(px + x, py + y, mget(MAP_OFFSET_X + x, MAP_OFFSET_Y + y))
+         local tile = mget(MAP_OFFSET_X + x, MAP_OFFSET_Y + y)
+         play_map:set(px + x, py + y, tile)
       end
    end
 end
 
-local function can_place(x, y)
-   if mget(x, y) == 0 then
-      return true
+-- Lock piece onto the main map (permanent placement)
+local function lock_piece(px, py)
+   for x = 0, 2 do
+      for y = 0, 2 do
+         local tile = mget(MAP_OFFSET_X + x, MAP_OFFSET_Y + y)
+         if tile ~= 0 then
+            -- Set on the main map using absolute coordinates
+            mset(PLAYFIELD_X + px + x, PLAYFIELD_Y + py + y, tile)
+         end
+      end
    end
-   return false
+end
+
+
+local function can_place(px, py)
+   -- Check all tiles in the 3x3 piece
+   for x = 0, 2 do
+      for y = 0, 2 do
+         -- Only check collision for non-empty tiles in the piece template
+         -- Swap x,y when reading from piece template to match set_piece
+         local piece_tile = mget(MAP_OFFSET_X + x, MAP_OFFSET_Y + y)
+         if piece_tile ~= 0 then
+            -- Check if the target position on the playfield is occupied
+            if mget(px + x, py + y) ~= 0 then
+               return false
+            end
+         end
+      end
+   end
+   return true
 end
 
 -- Helper functions to calculate next positions on-demand
@@ -109,8 +135,8 @@ local function handle_moving_vertically()
       -- Piece can't move down, count down lock delay
       lock_delay -= 1
       if lock_delay <= 0 then
-         -- Lock piece in place
-         mset(get_current_x(), get_current_y(), 1)
+         -- Lock piece in place (all tiles)
+         lock_piece(current_piece.x, current_piece.y)
          -- Spawn new piece
          current_piece = spawn_new_piece()
          lock_delay = LOCK_DELAY_FRAMES
