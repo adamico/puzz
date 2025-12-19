@@ -3,10 +3,16 @@ local Play = SceneManager:addState("Play")
 local play_map
 local PLAYFIELD_X = 8
 local PLAYFIELD_Y = 0
-local MAP_OFFSET_X = 0
-local MAP_OFFSET_Y = 18
 local TILE_WIDTH = 16
 local TILE_HEIGHT = TILE_WIDTH
+
+-- Rotation offsets: map coordinates for each orientation (right, down, left, up)
+local ROTATION_OFFSETS = {
+   {x = 0, y = 18}, -- right (index 1)
+   {x = 3, y = 18}, -- down (index 2)
+   {x = 6, y = 18}, -- left (index 3)
+   {x = 9, y = 18}, -- up (index 4)
+}
 
 local current_piece
 local PIECE_START_X = 6
@@ -17,7 +23,7 @@ local PIECE_SPEED_Y = 1
 local HORIZONTAL_MOVEMENT_FRAMES = 30
 local VERTICAL_MOVEMENT_FRAMES = 60
 local STOP_MOVING_FRAMES = 8
-local LOCK_DELAY_FRAMES = 30
+local LOCK_DELAY_FRAMES = 60
 local horizontal_move_timer = HORIZONTAL_MOVEMENT_FRAMES
 local vertical_move_timer_multiplier = 1
 local vertical_move_timer = VERTICAL_MOVEMENT_FRAMES * vertical_move_timer_multiplier
@@ -33,18 +39,48 @@ local function spawn_new_piece()
       y = PIECE_START_Y,
       speed_x = PIECE_SPEED_X,
       speed_y = PIECE_SPEED_Y,
+      orientation = 1, -- 1=right, 2=down, 3=left, 4=up
       move_dir_x = 1,
       move_dir_y = 1,
    }
    return piece
 end
 
+-- Get the current rotation offset for the piece
+local function get_piece_offset()
+   return ROTATION_OFFSETS[current_piece.orientation]
+end
+
+-- Rotate the piece (direction: 1 = clockwise, -1 = counter-clockwise)
+local function rotate_piece(direction)
+   local new_orientation = ((current_piece.orientation - 1 + direction) % 4) + 1
+   local new_offset = ROTATION_OFFSETS[new_orientation]
+
+   -- Check if rotation is valid (no collision)
+   local px = PLAYFIELD_X + current_piece.x
+   local py = PLAYFIELD_Y + current_piece.y
+   for x = 0, 2 do
+      for y = 0, 2 do
+         local tile = mget(new_offset.x + x, new_offset.y + y)
+         if tile ~= 0 then
+            if mget(px + x, py + y) ~= 0 then
+               return false -- Collision, can't rotate
+            end
+         end
+      end
+   end
+
+   current_piece.orientation = new_orientation
+   return true
+end
+
 local function set_piece(px, py)
    play_map = userdata("i16", 32, 32)
+   local offset = get_piece_offset()
 
    for x = 0, 2 do
       for y = 0, 2 do
-         local tile = mget(MAP_OFFSET_X + x, MAP_OFFSET_Y + y)
+         local tile = mget(offset.x + x, offset.y + y)
          play_map:set(px + x, py + y, tile)
       end
    end
@@ -52,9 +88,10 @@ end
 
 -- Lock piece onto the main map (permanent placement)
 local function lock_piece(px, py)
+   local offset = get_piece_offset()
    for x = 0, 2 do
       for y = 0, 2 do
-         local tile = mget(MAP_OFFSET_X + x, MAP_OFFSET_Y + y)
+         local tile = mget(offset.x + x, offset.y + y)
          if tile ~= 0 then
             -- Set on the main map using absolute coordinates
             mset(PLAYFIELD_X + px + x, PLAYFIELD_Y + py + y, tile)
@@ -66,11 +103,11 @@ end
 
 local function can_place(px, py)
    -- Check all tiles in the 3x3 piece
+   local offset = get_piece_offset()
    for x = 0, 2 do
       for y = 0, 2 do
          -- Only check collision for non-empty tiles in the piece template
-         -- Swap x,y when reading from piece template to match set_piece
-         local piece_tile = mget(MAP_OFFSET_X + x, MAP_OFFSET_Y + y)
+         local piece_tile = mget(offset.x + x, offset.y + y)
          if piece_tile ~= 0 then
             -- Check if the target position on the playfield is occupied
             if mget(px + x, py + y) ~= 0 then
@@ -105,11 +142,17 @@ local function reverse_if_colliding()
    end
 end
 
-local function handle_changing_direction()
-   if (btn(Game.buttons.x) or btn(Game.buttons.o) or mb == 1 or mb == 2)
-      and not button_pressed then
-      current_piece.move_dir_x *= -1
-      button_pressed = true
+local function handle_button_tap()
+   if not button_pressed then
+      if btn(Game.buttons.x) or mb == 1 then
+         -- Rotate clockwise
+         rotate_piece(1)
+         button_pressed = true
+      elseif btn(Game.buttons.o) or mb == 2 then
+         -- Rotate counter-clockwise
+         rotate_piece(-1)
+         button_pressed = true
+      end
    end
    if not (btn(Game.buttons.x) or btn(Game.buttons.o) or mb ~= 0) then
       button_pressed = false
@@ -200,7 +243,7 @@ function Play:update()
    reverse_if_colliding()
    -- test_movement()
    set_piece(current_piece.x, current_piece.y)
-   handle_changing_direction()
+   handle_button_tap()
    handle_button_holding()
    handle_moving_horizontally()
    handle_moving_vertically()
