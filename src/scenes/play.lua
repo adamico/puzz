@@ -3,6 +3,8 @@ local Play = SceneManager:addState("Play")
 local play_map
 local PLAYFIELD_X = 8
 local PLAYFIELD_Y = 0
+local MAP_OFFSET_X = 0
+local MAP_OFFSET_Y = 18
 local TILE_WIDTH = 16
 local TILE_HEIGHT = TILE_WIDTH
 
@@ -37,9 +39,14 @@ local function spawn_new_piece()
    return piece
 end
 
-local function set_piece(x, y)
+local function set_piece(px, py)
    play_map = userdata("i16", 32, 32)
-   play_map:set(x, y, 1)
+
+   for x = 0, 2 do
+      for y = 0, 2 do
+         play_map:set(px + x, py + y, mget(MAP_OFFSET_X + x, MAP_OFFSET_Y + y))
+      end
+   end
 end
 
 local function can_place(x, y)
@@ -96,15 +103,28 @@ local function handle_moving_horizontally()
 end
 
 local function handle_moving_vertically()
-   vertical_move_timer -= 1
-   if vertical_move_timer <= 0 then
-      -- Check collision directly below current position (not diagonal)
-      -- Horizontal and vertical movements are independent
-      if can_place(get_current_x(), get_next_y()) then
-         -- add another sound each time we move vertically
-         current_piece.y += current_piece.speed_y * current_piece.move_dir_y
+   local is_grounded = not can_place(get_current_x(), get_next_y())
+
+   if is_grounded then
+      -- Piece can't move down, count down lock delay
+      lock_delay -= 1
+      if lock_delay <= 0 then
+         -- Lock piece in place
+         mset(get_current_x(), get_current_y(), 1)
+         -- Spawn new piece
+         current_piece = spawn_new_piece()
+         lock_delay = LOCK_DELAY_FRAMES
       end
-      vertical_move_timer = VERTICAL_MOVEMENT_FRAMES * vertical_move_timer_multiplier
+   else
+      -- Piece can still fall, reset lock delay
+      lock_delay = LOCK_DELAY_FRAMES
+
+      -- Handle vertical movement timer
+      vertical_move_timer -= 1
+      if vertical_move_timer <= 0 then
+         current_piece.y += current_piece.speed_y * current_piece.move_dir_y
+         vertical_move_timer = VERTICAL_MOVEMENT_FRAMES * vertical_move_timer_multiplier
+      end
    end
 end
 
@@ -141,16 +161,6 @@ local function handle_button_holding()
          vertical_move_timer_multiplier = 0.25
          vertical_move_timer = 0
       end
-   end
-end
-
-local function handle_locking()
-   if lock_delay <= 0 then
-      -- lock piece in place
-      mset(current_piece.x, current_piece.y, 1)
-      -- spawn new piece
-      current_piece = spawn_new_piece()
-      lock_delay = LOCK_DELAY_FRAMES
    end
 end
 
