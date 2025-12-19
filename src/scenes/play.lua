@@ -23,7 +23,7 @@ local PIECE_SPEED_Y = 1
 local HORIZONTAL_MOVEMENT_FRAMES = 30
 local VERTICAL_MOVEMENT_FRAMES = 60
 local STOP_MOVING_FRAMES = 8
-local LOCK_DELAY_FRAMES = 60
+local LOCK_DELAY_FRAMES = 30
 local horizontal_move_timer = HORIZONTAL_MOVEMENT_FRAMES
 local vertical_move_timer_multiplier = 1
 local vertical_move_timer = VERTICAL_MOVEMENT_FRAMES * vertical_move_timer_multiplier
@@ -219,7 +219,10 @@ local function test_movement()
 end
 
 local function handle_button_holding()
-   if not button_pressed then
+   -- Check if both buttons are held (x AND o) or mouse button 3 (left+right)
+   local both_buttons_held = (btn(Game.buttons.x) and btn(Game.buttons.o)) or mb == 3
+
+   if not both_buttons_held then
       stop_moving_timer = STOP_MOVING_FRAMES
       current_piece.speed_x = PIECE_SPEED_X
       vertical_move_timer_multiplier = 1
@@ -227,7 +230,7 @@ local function handle_button_holding()
       stop_moving_timer -= 1
       if stop_moving_timer == 0 then
          current_piece.speed_x = 0
-         vertical_move_timer_multiplier = 0.25
+         vertical_move_timer_multiplier = 0.125
          vertical_move_timer = 0
       end
    end
