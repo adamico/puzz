@@ -1,162 +1,136 @@
 local Play = SceneManager:addState("Play")
 
+local PLAYFIELD_X = 8
+local PLAYFIELD_Y = 0
+local TILE_WIDTH = 16
+local TILE_HEIGHT = TILE_WIDTH
+local PIECE_START_X = 6
+local PIECE_START_Y = 0
+local play_map
+
+local horizontal_movement_delay = 30
+local horizontal_move_timer = horizontal_movement_delay
+local vertical_movement_delay = 120
+local vertical_move_timer = vertical_movement_delay
+
 local mx, my, mb = 0, 0, 0
 local button_pressed = false
-local PIECE_START_X = 200
-local PIECE_START_Y = 8
-local PIECE_SPEED_X = 1
-local PIECE_SPEED_Y = 4
-local lock_delay = 30
-local mymap = userdata("i16", 30, 17) -- placeholder for map data
+local next_x = 0
+local next_y = 0
 
-local function spawn_new_piece(piece)
-   -- For now, just reset the piece to the top
-   -- In the future, we would randomize the piece type
-   -- and set its initial position accordingly
-   piece.x = PIECE_START_X
-   piece.y = PIECE_START_Y
-   piece.speed_x = PIECE_SPEED_X
-   piece.speed_y = 0
+local function spawn_new_piece()
+   local piece = {
+      x = PIECE_START_X,
+      y = PIECE_START_Y,
+      speed_x = 1,
+      speed_y = 1,
+      move_dir_x = 1,
+      move_dir_y = 1,
+   }
+   return piece
 end
 
-local function lock_piece(piece)
-   local hitbox = piece.hitboxes[piece.hitbox + 1]
-   piece.y = SCREEN_HEIGHT - BOTTOM_HEIGHT - (hitbox.y + hitbox.h)
-   piece.speed_x = 0
-   spawn_new_piece(piece)
-   lock_delay = 30
+local function set_piece(x, y)
+   play_map = userdata("i16", 32, 32)
+   play_map:set(x, y, 1)
 end
 
-local function wall_collision(piece, next_hitbox, wall)
-   return wall == "left" and piece.x < PLAYING_FIELD_LEFT - next_hitbox.x
-      or wall == "right" and piece.x > PLAYING_FIELD_RIGHT - (next_hitbox.x + next_hitbox.w)
-      or false
-end
-
-local function landed_piece(piece)
-   local hitbox = piece.hitboxes[piece.hitbox + 1]
-   return piece.y + hitbox.y + hitbox.h >= SCREEN_HEIGHT - BOTTOM_HEIGHT
-end
-
-local function can_rotate(piece, rotation_direction)
-   if rotation_direction == 0 then return true end
-   local orientation = piece.orientations[piece.orientation + 1]
-   local wall = ({
-      down = {[1] = "left", [-1] = "right"},
-      up   = {[1] = "right", [-1] = "left"}
-   })[orientation] and ({
-      down = {[1] = "left", [-1] = "right"},
-      up   = {[1] = "right", [-1] = "left"}
-   })[orientation][rotation_direction] or nil
-
-   local next_hitbox = piece.hitboxes[(piece.hitbox + rotation_direction) % 4 + 1]
-
-   -- Check for wall collision if needed
-   if wall and wall_collision(piece, next_hitbox, wall) then
-      return false
+local function can_place(x, y)
+   if mget(x, y) == 0 then
+      return true
    end
-
-   -- Check for collision with well bottom
-   local next_y = piece.y
-   if next_y + next_hitbox.y + next_hitbox.h > SCREEN_HEIGHT - BOTTOM_HEIGHT then
-      return false
-   end
-
-   return true
+   return false
 end
 
-local function handle_rotation(piece)
-   local rotation_direction = 0
-   if (btn(Game.buttons.x) or mb == 1) and not button_pressed then
-      rotation_direction = 1
-      button_pressed = true
-   elseif (btn(Game.buttons.o) or mb == 2) and not button_pressed then
-      rotation_direction = -1
+local function reverse_if_colliding(piece)
+   next_x = PLAYFIELD_X + piece.x + piece.speed_x * piece.move_dir_x
+   next_y = PLAYFIELD_Y + piece.y + piece.speed_y * piece.move_dir_y
+   if not can_place(next_x, piece.y) then
+      piece.move_dir_x *= -1
+      next_x = PLAYFIELD_X + piece.x + piece.speed_x * piece.move_dir_x
+   end
+end
+
+local function handle_changing_direction(piece)
+   if (btn(Game.buttons.x) or btn(Game.buttons.o) or mb == 1 or mb == 2)
+      and not button_pressed then
+      piece.move_dir_x *= -1
       button_pressed = true
    end
    if not (btn(Game.buttons.x) or btn(Game.buttons.o) or mb ~= 0) then
       button_pressed = false
    end
-   if can_rotate(piece, rotation_direction) then
-      piece.sprite = (piece.sprite + rotation_direction) % 4 + 8
-      piece.hitbox = (piece.hitbox + rotation_direction) % 4
-      piece.orientation = (piece.orientation + rotation_direction) % 4
-   end
 end
 
 local function handle_moving_horizontally(piece)
-   local hitbox = piece.hitboxes[piece.hitbox + 1]
-   if piece.x > PLAYING_FIELD_RIGHT - (hitbox.x + hitbox.w) or piece.x < PLAYING_FIELD_LEFT - hitbox.x then
-      piece.move_dir_x *= -1
+   horizontal_move_timer -= 1
+   if horizontal_move_timer <= 0 then
+      -- we only check horizontally if we are moving horizontally
+      if can_place(next_x, piece.y) then
+         -- add sound each time we move horizontally
+         piece.x += piece.speed_x * piece.move_dir_x
+      end
+      horizontal_move_timer = horizontal_movement_delay
    end
 end
 
-local function handle_moving_down(piece)
-   if btn(Game.buttons.o) and btn(Game.buttons.x) or mb == 3 then
-      piece.speed_y = PIECE_SPEED_Y
-      piece.speed_x = 0
+local function handle_moving_vertically(piece)
+   vertical_move_timer -= 1
+   if vertical_move_timer <= 0 then
+      -- we check both horizontally and vertically if we are moving vertically
+      if can_place(next_x, next_y) then
+         -- add another sound each time we move vertically
+         piece.y += piece.speed_y * piece.move_dir_y
+      end
+      vertical_move_timer = vertical_movement_delay
+   end
+end
+
+local function test_movement(piece)
+   if btnp(Game.buttons.left) then
+      piece.speed_x = 1
+      piece.move_dir_x = -1
+   elseif btnp(Game.buttons.right) then
+      piece.speed_x = 1
+      piece.move_dir_x = 1
    else
-      piece.speed_x = PIECE_SPEED_X
-      piece.speed_y = 0
+      piece.speed_x = 0
    end
-   if landed_piece(piece) then
+   if btnp(Game.buttons.up) then
+      piece.speed_y = 1
+      piece.move_dir_y = -1
+   elseif btnp(Game.buttons.down) then
+      piece.speed_y = 1
+      piece.move_dir_y = 1
+   else
       piece.speed_y = 0
-      lock_delay -= 1
-   end
-end
-
-local function handle_locking(piece)
-   if lock_delay <= 0 then
-      lock_piece(piece)
    end
 end
 
 function Play:enteredState()
    Log.trace("Entered Play scene")
-   self.piece = {
-      sprite = 8,
-      x = PIECE_START_X,
-      y = PIECE_START_Y,
-      width = 51,
-      height = 51,
-      orientation = 0,
-      hitbox = 0,
-      hitboxes = {
-         {x = 17, y = 17, w = 32, h = 15}, -- right
-         {x = 17, y = 17, w = 15, h = 32}, -- down
-         {x = 0, y = 17, w = 32, h = 15}, -- left
-         {x = 17, y = 0, w = 15, h = 32}, -- up
-      },
-      orientations = {
-         "right",
-         "down",
-         "left",
-         "up",
-      },
-      move_dir_x = 1,
-      speed_x = 1,
-      speed_y = 0,
-   }
-   mymap = map()
+   self.piece = spawn_new_piece()
 end
 
 function Play:update()
    mx, my, mb = mouse()
-   handle_rotation(self.piece)
+   reverse_if_colliding(self.piece)
+   -- test_movement(self.piece)
+   set_piece(self.piece.x, self.piece.y)
+   handle_changing_direction(self.piece)
    handle_moving_horizontally(self.piece)
-   handle_moving_down(self.piece)
-   handle_locking(self.piece)
-   self.piece.x += self.piece.speed_x * self.piece.move_dir_x
-   self.piece.y += self.piece.speed_y
+   handle_moving_vertically(self.piece)
 end
 
 function Play:draw()
-   cls(0)
+   cls()
+   --- @diagnostic disable-next-line: missing-parameter
    map()
-
-   spr(self.piece.sprite, self.piece.x, self.piece.y)
-   print("pspd_x: " .. self.piece.speed_x, 10, 10, 8)
-   print("pspd_y: " .. self.piece.speed_y, 10, 20, 8)
+   map(play_map, 0, 0, PLAYFIELD_X * TILE_WIDTH, PLAYFIELD_Y * TILE_HEIGHT)
+   print("HMT:"..horizontal_move_timer, 10, 10, 8)
+   -- print("PX:"..self.piece.x, 10, 20, 8)
+   print("PDIR:"..self.piece.move_dir_x, 10, 30, 8)
+   print("nextx:"..mget(next_x, self.piece.y), 10, 40, 8)
 end
 
 function Play:exitedState()
